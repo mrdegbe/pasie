@@ -1,63 +1,79 @@
+import MetaTrader5 as mt5
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# -----------------------------
-# 1. Load price data
-# -----------------------------
-
-# For now, we use a CSV file
-# You will replace this later with MT5 data
-
-df = pd.read_csv("data.csv")
-
-# Ensure correct order
-df = df.sort_values("timestamp").reset_index(drop=True)
-
 
 # -----------------------------
-# 2. Detect swing highs & lows
+# 1. Connect to MT5
 # -----------------------------
+if not mt5.initialize():
+    print("Initialization failed:", mt5.last_error())
+    quit()
 
-LOOKBACK = 2
+print("MT5 connected")
 
-def detect_swings(data, lookback):
+symbol = "EURUSD"
+
+if not mt5.symbol_select(symbol, True):
+    print("Failed to select symbol")
+    mt5.shutdown()
+    quit()
+
+# Get 300 candles for better structure visibility
+rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 300)
+
+if rates is None:
+    print("Failed to get rates:", mt5.last_error())
+    mt5.shutdown()
+    quit()
+
+df = pd.DataFrame(rates)
+df['time'] = pd.to_datetime(df['time'], unit='s')
+
+
+# -----------------------------
+# 2. Structure Logic (Swings)
+# -----------------------------
+def find_swings(data, lookback=3):
     swings = []
 
     for i in range(lookback, len(data) - lookback):
-        high = data.loc[i, "high"]
-        low = data.loc[i, "low"]
+        high = data['high'].iloc[i]
+        low = data['low'].iloc[i]
 
-        prev_highs = data.loc[i-lookback:i-1, "high"]
-        next_highs = data.loc[i+1:i+lookback, "high"]
+        is_swing_high = all(high > data['high'].iloc[i - j] for j in range(1, lookback + 1)) and \
+                        all(high > data['high'].iloc[i + j] for j in range(1, lookback + 1))
 
-        prev_lows = data.loc[i-lookback:i-1, "low"]
-        next_lows = data.loc[i+1:i+lookback, "low"]
+        is_swing_low = all(low < data['low'].iloc[i - j] for j in range(1, lookback + 1)) and \
+                       all(low < data['low'].iloc[i + j] for j in range(1, lookback + 1))
 
-        if high > prev_highs.max() and high > next_highs.max():
-            swings.append((i, high, "high"))
+        if is_swing_high:
+            swings.append((data['time'].iloc[i], high, "high"))
 
-        if low < prev_lows.min() and low < next_lows.min():
-            swings.append((i, low, "low"))
+        if is_swing_low:
+            swings.append((data['time'].iloc[i], low, "low"))
 
     return swings
 
 
-swings = detect_swings(df, LOOKBACK)
+swings = find_swings(df)
 
 
 # -----------------------------
-# 3. Plot price + structure
+# 3. Plot
 # -----------------------------
+plt.figure(figsize=(12, 6))
+plt.plot(df['time'], df['close'])
 
-plt.figure(figsize=(14, 6))
-plt.plot(df["close"], label="Close Price", color="black")
-
-for index, price, swing_type in swings:
-    if swing_type == "high":
-        plt.scatter(index, price, color="red", s=50)
+for swing in swings:
+    if swing[2] == "high":
+        plt.scatter(swing[0], swing[1])
     else:
-        plt.scatter(index, price, color="green", s=50)
+        plt.scatter(swing[0], swing[1])
 
-plt.title("Market Structure – Swing Highs & Lows")
-plt.legend()
+plt.title("Live EURUSD M15 Structure")
+plt.xticks(rotation=45)
+plt.tight_layout()
 plt.show()
+
+mt5.shutdown()

@@ -9,19 +9,19 @@ import pandas as pd
 
 # print("MT5 initialized successfully")
 
-path = r"C:\Program Files\MetaTrader 5\terminal64.exe" 
+path = r"C:\Program Files\MetaTrader 5 EXNESS\terminal64.exe" 
 
-account = 298407903
-password = "Python_1"
-server = "Exness-MT5Trial9"
+# account = 298407903
+# password = "Python_1"
+# server = "Exness-MT5Trial9"
 
-if not mt5.initialize(path=path, login=account, password=password, server=server):
-    print("Initialization failed, error code =", mt5.last_error())
-    quit()
-
-# if not mt5.initialize(path):
+# if not mt5.initialize(path=path, login=account, password=password, server=server):
 #     print("Initialization failed, error code =", mt5.last_error())
 #     quit()
+
+if not mt5.initialize(path):
+    print("Initialization failed, error code =", mt5.last_error())
+    quit()
 
 print("MT5 initialized successfully")
 
@@ -41,7 +41,7 @@ bars = 100
 
 # mt5.shutdown()
 
-rates = mt5.copy_rates_from_pos("EURUSD", mt5.TIMEFRAME_M15, 0, 100)
+rates = mt5.copy_rates_from_pos("EURUSDm", mt5.TIMEFRAME_M15, 0, 100)
 
 if rates is None:
     print("Failed to get rates:", mt5.last_error())
