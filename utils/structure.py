@@ -1,38 +1,57 @@
 # utils/structure.py
 
 import numpy as np
+from utils.bias import get_direction
 from utils.helper import get_pip_size
 
 
 # ===================================================
 # 1️⃣ SWING DETECTION
 # ===================================================
-def find_swings(data, lookback=3, tolerance=0.0):
+def find_swings(data, lookback: int = 3, tolerance: float = 0.0):
+    """
+    Detect swing highs and swing lows using symmetric lookback confirmation.
+
+    Args:
+        data: OHLC dataframe with 'High' and 'Low' columns
+        lookback: Number of candles to check on each side
+        tolerance: Percentage tolerance for near-equal highs/lows
+
+    Returns:
+        List of tuples:
+        (timestamp, price, 'high' or 'low')
+    """
+
     swings = []
 
+    highs = data["High"]
+    lows = data["Low"]
+    index = data.index
+
     for i in range(lookback, len(data) - lookback):
-        high = data["High"].iloc[i]
-        low = data["Low"].iloc[i]
 
-        left_highs = data["High"].iloc[i - lookback : i]
-        right_highs = data["High"].iloc[i + 1 : i + lookback + 1]
+        current_high = highs.iloc[i]
+        current_low = lows.iloc[i]
 
-        left_lows = data["Low"].iloc[i - lookback : i]
-        right_lows = data["Low"].iloc[i + 1 : i + lookback + 1]
+        left_highs = highs.iloc[i - lookback : i]
+        right_highs = highs.iloc[i + 1 : i + lookback + 1]
 
-        is_swing_high = all(high >= h * (1 - tolerance) for h in left_highs) and all(
-            high >= h * (1 - tolerance) for h in right_highs
-        )
+        left_lows = lows.iloc[i - lookback : i]
+        right_lows = lows.iloc[i + 1 : i + lookback + 1]
 
-        is_swing_low = all(low <= l * (1 + tolerance) for l in left_lows) and all(
-            low <= l * (1 + tolerance) for l in right_lows
-        )
+        is_swing_high = all(
+            current_high >= h * (1 - tolerance) for h in left_highs
+        ) and all(current_high >= h * (1 - tolerance) for h in right_highs)
+
+        is_swing_low = all(
+            current_low <= l * (1 + tolerance) for l in left_lows
+        ) and all(current_low <= l * (1 + tolerance) for l in right_lows)
 
         if is_swing_high:
-            swings.append((data.index[i], high, "high"))
+            swings.append((index[i], current_high, "high"))
 
         if is_swing_low:
-            swings.append((data.index[i], low, "low"))
+            swings.append((index[i], current_low, "low"))
 
     return swings
 
@@ -41,6 +60,19 @@ def find_swings(data, lookback=3, tolerance=0.0):
 # 2️⃣ STRICT FRACTAL ALTERNATION
 # ===================================================
 def strict_alternation_structure(swings):
+    """
+    Enforce strict alternation between swing highs and lows.
+
+    Removes consecutive swings of the same type by keeping
+    only the most extreme one.
+
+    Args:
+        swings: List of tuples -> (timestamp, price, type)
+
+    Returns:
+        Cleaned list of alternating swings.
+    """
+
     if not swings:
         return []
 
@@ -49,71 +81,27 @@ def strict_alternation_structure(swings):
     for swing in swings[1:]:
         last = cleaned[-1]
 
-        # Alternate type
-        if swing[2] != last[2]:
+        swing_time, swing_price, swing_type = swing
+        _, last_price, last_type = last
+
+        # If swing type alternates → valid structure
+        if swing_type != last_type:
             cleaned.append(swing)
-        else:
-            # Replace with more extreme swing
-            if swing[2] == "low" and swing[1] < last[1]:
-                cleaned[-1] = swing
-            elif swing[2] == "high" and swing[1] > last[1]:
-                cleaned[-1] = swing
+            continue
+
+        # Same type → keep the more extreme swing
+        if swing_type == "low" and swing_price < last_price:
+            cleaned[-1] = swing
+
+        elif swing_type == "high" and swing_price > last_price:
+            cleaned[-1] = swing
 
     return cleaned
 
 
-# ===================================================
+# # ===================================================
 # 3️⃣ SEQUENTIAL STRUCTURE DIRECTION
-# ===================================================
-def get_direction(swings, tolerance=0.0):
-    """
-    Determine structural direction using sequential swing logic.
-    Requires strictly alternating swings.
-    """
-
-    if len(swings) < 4:
-        return "neutral"
-
-    # Last 4 swings define latest structural cycle
-    s1, s2, s3, s4 = swings[-4:]
-
-    # Case 1: high → low → high → low
-    if s1[2] == "high" and s2[2] == "low" and s3[2] == "high" and s4[2] == "low":
-
-        prev_high = s1[1]
-        prev_low = s2[1]
-        last_high = s3[1]
-        last_low = s4[1]
-
-        if last_high > prev_high * (1 - tolerance) and last_low > prev_low * (
-            1 - tolerance
-        ):
-            return "bullish"
-
-        if last_high < prev_high * (1 + tolerance) and last_low < prev_low * (
-            1 + tolerance
-        ):
-            return "bearish"
-
-    # Case 2: low → high → low → high
-    elif s1[2] == "low" and s2[2] == "high" and s3[2] == "low" and s4[2] == "high":
-
-        prev_low = s1[1]
-        prev_high = s2[1]
-        last_low = s3[1]
-        last_high = s4[1]
-
-        if last_high > prev_high * (1 - tolerance) and last_low > prev_low * (
-            1 - tolerance
-        ):
-            return "bullish"
-
-        if last_high < prev_high * (1 + tolerance) and last_low < prev_low * (
-            1 + tolerance
-        ):
-            return "bearish"
-
-    return "neutral"
+# # ===================================================
 
 
 # ===================================================
@@ -128,31 +116,55 @@ def detect_bos(
     body_threshold=0.6,
     lookback=20,
 ):
+    """
+    Detect Break of Structure (BOS) using confirmed closed candles
+    and displacement validation.
+    """
 
-    if len(swings) < 2 or len(data) < lookback + 2:
+    # ---------------------------------------------------
+    # Guard Clauses
+    # ---------------------------------------------------
+    if len(swings) < 2:
         return None
 
-    highs = [s for s in swings if s[2] == "high"]
-    lows = [s for s in swings if s[2] == "low"]
-
-    if not highs or not lows:
+    if len(data) < lookback + 2:
         return None
 
+    # ---------------------------------------------------
+    # Separate swing highs and lows
+    # ---------------------------------------------------
+    swing_highs = [s for s in swings if s[2] == "high"]
+    swing_lows = [s for s in swings if s[2] == "low"]
+
+    if not swing_highs or not swing_lows:
+        return None
+
+    last_high = swing_highs[-1]
+    last_low = swing_lows[-1]
+
+    # ---------------------------------------------------
+    # Pip Buffer (prevents false micro breaks)
+    # ---------------------------------------------------
     pip_value = get_pip_size(symbol)
     buffer = pip_buffer * pip_value
 
-    last_high = highs[-1]
-    last_low = lows[-1]
+    # ---------------------------------------------------
+    # Use Last CONFIRMED Closed Candle
+    # ---------------------------------------------------
+    candle = data.iloc[-2]
 
-    # Use confirmed closed candle
-    # Use confirmed closed candle
-    current_close = data["Close"].iloc[-2]
-    current_open = data["Open"].iloc[-2]
-    current_high = data["High"].iloc[-2]
-    current_low = data["Low"].iloc[-2]
+    current_open = candle["Open"]
+    current_close = candle["Close"]
+    current_high = candle["High"]
+    current_low = candle["Low"]
 
+    # ---------------------------------------------------
+    # Displacement Calculation
+    # ---------------------------------------------------
     current_range = current_high - current_low
-    avg_range = (data["High"] - data["Low"]).iloc[-lookback - 1 : -2].mean()
+
+    historical_ranges = (data["High"] - data["Low"]).iloc[-lookback - 1 : -2]
+    avg_range = historical_ranges.mean()
 
     if avg_range == 0:
         return None
@@ -160,15 +172,17 @@ def detect_bos(
     body = abs(current_close - current_open)
     body_percent = body / current_range if current_range != 0 else 0
 
-    displacement = (
+    displacement_confirmed = (
         current_range > displacement_multiplier * avg_range
         and body_percent > body_threshold
     )
 
-    # Bullish BOS
+    # ---------------------------------------------------
+    # Bullish BOS Detection
+    # ---------------------------------------------------
     if (
         current_close > last_high[1] + buffer
-        and displacement
+        and displacement_confirmed
         and current_close > current_open
     ):
         return {
@@ -178,10 +192,12 @@ def detect_bos(
             "index": data.index[-2],
         }
 
-    # Bearish BOS
+    # ---------------------------------------------------
+    # Bearish BOS Detection
+    # ---------------------------------------------------
     if (
         current_close < last_low[1] - buffer
-        and displacement
+        and displacement_confirmed
         and current_close < current_open
     ):
         return {
@@ -198,59 +214,102 @@ def detect_bos(
 # 5️⃣ STRUCTURAL MOMENTUM
 # ===================================================
 def calculate_momentum(swings):
-    highs = [s[1] for s in swings if s[2] == "high"]
-    lows = [s[1] for s in swings if s[2] == "low"]
+    """
+    Calculate structural momentum score based on progression
+    of recent swing highs and lows.
+
+    Returns:
+        int: Momentum score
+             +2 = strong bullish momentum
+             +1 = bullish momentum
+              0 = neutral / mixed
+             -1 = bearish momentum
+             -2 = strong bearish momentum
+    """
+
+    # ---------------------------------------------------
+    # Extract swing highs and lows
+    # ---------------------------------------------------
+    highs = [price for _, price, t in swings if t == "high"]
+    lows = [price for _, price, t in swings if t == "low"]
 
     score = 0
 
-    if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]:
-        score += 1
+    # ---------------------------------------------------
+    # Higher Highs → Bullish Strength
+    # ---------------------------------------------------
+    if len(highs) >= 3:
+        if highs[-3] < highs[-2] < highs[-1]:
+            score += 1
 
-    if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
-        score += 1
+    # ---------------------------------------------------
+    # Higher Lows → Bullish Strength
+    # ---------------------------------------------------
+    if len(lows) >= 3:
+        if lows[-3] < lows[-2] < lows[-1]:
+            score += 1
 
-    if len(highs) >= 3 and highs[-1] < highs[-2] < highs[-3]:
-        score -= 1
+    # ---------------------------------------------------
+    # Lower Highs → Bearish Strength
+    # ---------------------------------------------------
+    if len(highs) >= 3:
+        if highs[-3] > highs[-2] > highs[-1]:
+            score -= 1
 
-    if len(lows) >= 3 and lows[-1] < lows[-2] < lows[-3]:
-        score -= 1
+    # ---------------------------------------------------
+    # Lower Lows → Bearish Strength
+    # ---------------------------------------------------
+    if len(lows) >= 3:
+        if lows[-3] > lows[-2] > lows[-1]:
+            score -= 1
 
     return score
 
 
 def compress_structure_after_bos(swings, bos):
     """
-    Compress swings after confirmed BOS.
-    Keeps only the protected level and the new structural break.
+    Compress swing structure after confirmed BOS.
+
+    Keeps:
+    - The protected swing level (last opposite swing before BOS)
+    - The newest swing that confirms the new structure
     """
 
-    if not bos or len(swings) < 2:
+    # ---------------------------------------------------
+    # Guard Clauses
+    # ---------------------------------------------------
+    if bos is None or len(swings) < 2:
         return swings
 
-    level = bos["level"]
+    bos_level = bos["level"]
     bos_type = bos["type"]
 
-    # Find swing that was broken
-    broken_index = None
-    for i, s in enumerate(swings):
-        if abs(s[1] - level) < 1e-10:
-            broken_index = i
-            break
+    # ---------------------------------------------------
+    # Locate the swing level that was broken
+    # ---------------------------------------------------
+    broken_index = next(
+        (i for i, s in enumerate(swings) if abs(s[1] - bos_level) < 1e-10),
+        None,
+    )
 
     if broken_index is None:
         return swings
 
+    # ---------------------------------------------------
+    # Bullish BOS → find last LOW before broken HIGH
+    # ---------------------------------------------------
     if bos_type == "bullish_bos":
-        # Keep last low before broken high
-        for j in range(broken_index - 1, -1, -1):
-            if swings[j][2] == "low":
-                return [swings[j], swings[-1]]
+        for i in range(broken_index - 1, -1, -1):
+            if swings[i][2] == "low":
+                return [swings[i], swings[-1]]
 
-    elif bos_type == "bearish_bos":
-        # Keep last high before broken low
-        for j in range(broken_index - 1, -1, -1):
-            if swings[j][2] == "high":
-                return [swings[j], swings[-1]]
+    # ---------------------------------------------------
+    # Bearish BOS → find last HIGH before broken LOW
+    # ---------------------------------------------------
+    if bos_type == "bearish_bos":
+        for i in range(broken_index - 1, -1, -1):
+            if swings[i][2] == "high":
+                return [swings[i], swings[-1]]
 
     return swings
 
