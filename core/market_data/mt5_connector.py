@@ -3,8 +3,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# C:\Users\USER\Desktop\Trading\pasie\venv\Scripts\python.exe
-
 def connect() -> bool:
     """
     Initialize connection to MetaTrader5 terminal.

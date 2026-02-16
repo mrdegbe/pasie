@@ -1,7 +1,7 @@
 
-# ===================================================
-# 5️⃣ STRUCTURAL MOMENTUM
-# ===================================================
+# ------------------------------
+# STRUCTURAL MOMENTUM
+# ------------------------------
 def calculate_momentum(swings):
     """
     Calculate structural momentum score based on progression

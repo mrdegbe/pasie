@@ -1,4 +1,6 @@
-
+# --------------------------------------------
+# STRUCTURE COMPRESSION
+# --------------------------------------------
 def compress_structure_after_bos(swings, bos):
     """
     Compress swing structure after confirmed BOS.

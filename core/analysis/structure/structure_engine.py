@@ -6,11 +6,9 @@ from core.analysis.structure.bos import detect_bos
 from core.analysis.structure.compression import compress_structure_after_bos
 
 
-# ===================================================
-# 6️⃣ MASTER STRUCTURE ENGINE (MULTI-PAIR SAFE)
-# ===================================================
-
-
+# ---------------------------------------------
+# MASTER STRUCTURE ENGINE (MULTI-PAIR SAFE)
+# ---------------------------------------------
 def analyze_structure(
     data,
     internal_lookback: int = 3,

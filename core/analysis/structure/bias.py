@@ -2,10 +2,11 @@ import logging
 from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
-
 Swing = Tuple  # (timestamp, price, type)
 
-
+# ---------------------------------------------
+# BIAS DETERMINATION USING SEQUENTIAL SWING LOGIC
+# ---------------------------------------------
 def get_bias(swings: List[Swing], tolerance: float = 0.0) -> str:
     """
     Determine market structural direction using sequential swing logic.
