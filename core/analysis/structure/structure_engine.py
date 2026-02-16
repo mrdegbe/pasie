@@ -5,6 +5,8 @@ from core.analysis.structure.bias import get_bias
 from core.analysis.structure.bos import detect_bos
 from core.analysis.structure.compression import compress_structure_after_bos
 
+from core.models.structure import StructureSnapshot, Bias
+
 
 # ---------------------------------------------
 # MASTER STRUCTURE ENGINE (MULTI-PAIR SAFE)
@@ -156,13 +158,16 @@ def analyze_structure(
     else:
         state = "transition" if internal_direction != "neutral" else "distribution"
 
-    return {
-        "symbol": symbol,
-        "external_direction": external_direction,
-        "internal_direction": internal_direction,
-        "state": state,
-        "bos": bos,
-        "momentum_score": momentum,
-        "external_swings": external_swings,
-        "internal_swings": internal_swings,
-    }
+    return StructureSnapshot(
+        symbol=symbol,
+        timeframe=None,  # will be filled by topdown engine later
+        bias=Bias(
+            external=external_direction,
+            internal=internal_direction,
+        ),
+        state=state,
+        bos_event=bos,
+        momentum=momentum,
+        external_swings=external_swings,
+        internal_swings=internal_swings,
+    )

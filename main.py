@@ -7,7 +7,7 @@ from core.market_data.data_fetcher import get_data
 
 PAIRS = [
     "EURUSDm",
-    # "GBPUSDm",
+    "GBPUSDm",
     # "AUDUSDm",
     # "NZDUSDm",
     # "USDCHFm",
