@@ -26,6 +26,37 @@ class StructureSnapshot:
     external_swings: List[Swing]
     internal_swings: List[Swing]
 
+    supply_zones: List
+    demand_zones: List
+
+
+@dataclass
+class StructureContext:
+    symbol: str
+    timeframe: str
+    swings: list
+    cleaned_swings: list
+    direction: str
+    bos: dict | None
+    momentum_score: int
+    supply_zones: list
+    demand_zones: list
+
+
+@dataclass
+class TopdownSnapshot:
+    symbol: str
+
+    weekly: StructureSnapshot
+    daily: StructureSnapshot
+    h4: StructureSnapshot
+    m15: StructureSnapshot
+
+    dominant_bias: str
+    alignment_score: int
+    trade_context: str
+    trade_allowed: bool
+
 
 # from dataclasses import dataclass
 # from typing import List, Tuple, Optional
