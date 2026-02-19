@@ -37,11 +37,11 @@ def build_market_context(symbol=None):
     If symbol is None, returns a default snapshot with empty data.
     """
 
-    if symbol is None:
-        snapshots = {}
-        for tf in timeframes:
-            snapshots[tf] = analyze_timeframe(symbol, tf)
-        return TopdownSnapshot(symbol=symbol, snapshots=snapshots)
+    # if symbol is None:
+    #     snapshots = {}
+    #     for tf in timeframes:
+    #         snapshots[tf] = analyze_timeframe(symbol, tf)
+    #     return TopdownSnapshot(symbol=symbol, snapshots=snapshots)
 
     # In a real implementation, this would involve more complex logic and data fetching
     weekly_snapshot = analyze_timeframe(symbol, "weekly")
