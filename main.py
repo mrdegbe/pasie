@@ -3,10 +3,10 @@ import time
 from config import CONFIDENCE_THRESHOLD, PAIRS
 from core.models import Setup
 from core.mt5 import connect, get_data, shutdown
+from core.notifier import send_telegram_message
 from core.setup import SetupEvaluator
 from core.structure import StructureEngine
 from core.topdown import TopDownEngine
-from infrastructure.telegram.alerts import send_telegram_message
 
 
 def main():
