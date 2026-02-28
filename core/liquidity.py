@@ -1,6 +1,4 @@
-# core/liquidity/engine.py
-
-from core.models.liquidity import LiquidityLevel
+from core.models import LiquidityLevel
 
 
 class LiquidityEngine:

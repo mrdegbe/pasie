@@ -2,8 +2,9 @@
 
 import pandas as pd
 from typing import List
-from core.analysis.structure.swings import find_swings, strict_alternation_structure
-from core.models.zones import SupplyDemandZone
+
+from core.models import SupplyDemandZone
+from core.utils import find_swings, strict_alternation_structure
 
 
 class SupplyDemandEngine:

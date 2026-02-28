@@ -1,13 +1,16 @@
 from typing import Optional
 
-from core.analysis.structure.swings import find_swings, strict_alternation_structure
-from core.analysis.structure.bias import get_bias
-from core.analysis.structure.bos import detect_bos
-from core.analysis.structure.compression import compress_structure_after_bos
-from core.analysis.structure.momentum import calculate_momentum
-from core.analysis.zones.engine import SupplyDemandEngine
-from core.models.analysis import StructureSnapshot, Bias
-from core.liquidity.engine import LiquidityEngine
+from core.liquidity import LiquidityEngine
+from core.models import Bias, StructureSnapshot
+from core.utils import (
+    calculate_momentum,
+    compress_structure_after_bos,
+    detect_bos,
+    find_swings,
+    get_bias,
+    strict_alternation_structure,
+)
+from core.zones import SupplyDemandEngine
 
 
 class StructureEngine:

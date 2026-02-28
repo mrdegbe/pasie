@@ -1,7 +1,7 @@
 from typing import Dict
 
-from core.analysis.structure.engine import StructureEngine
-from core.models.analysis import TopDownSnapshot
+from core.models import TopDownSnapshot
+from core.structure import StructureEngine
 
 
 class TopDownEngine:

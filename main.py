@@ -1,16 +1,12 @@
 import MetaTrader5 as mt5
 import time
-
-from core.analysis.structure.engine import StructureEngine
-from core.analysis.topdown.engine import TopDownEngine
-from core.data.mt5 import connect, shutdown, get_data
-from core.models.setup import Setup
-from core.setup.engine import SetupEvaluator
+from config import CONFIDENCE_THRESHOLD, PAIRS
+from core.models import Setup
+from core.mt5 import connect, get_data, shutdown
+from core.setup import SetupEvaluator
+from core.structure import StructureEngine
+from core.topdown import TopDownEngine
 from infrastructure.telegram.alerts import send_telegram_message
-from utils.helper import PAIRS
-
-# Confidence threshold for alerts
-CONFIDENCE_THRESHOLD = 20.0
 
 
 def main():
@@ -75,7 +71,7 @@ def main():
                     )
                     print(msg)
                     send_telegram_message(msg)
-                    
+
             # -------------------------------
             # 6️⃣ Wait for next M15 bar (~900s)
             # -------------------------------

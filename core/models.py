@@ -3,8 +3,6 @@ from typing import List, Tuple, Optional
 import pandas as pd
 from typing import Any, List, Dict
 
-from core.models.liquidity import LiquidityLevel
-
 Swing = Tuple[pd.Timestamp, float, str]
 
 
@@ -12,6 +10,16 @@ Swing = Tuple[pd.Timestamp, float, str]
 class Bias:
     external: str
     internal: str
+
+
+@dataclass
+class LiquidityLevel:
+    price: float
+    liquidity_type: str  # "equal_high", "equal_low", "swing_high", "swing_low"
+    timeframe: str
+    indices: List[int] = field(default_factory=list)
+    swept: bool = False
+    swept_at_index: Optional[int] = None
 
 
 @dataclass
@@ -61,3 +69,25 @@ class TopDownSnapshot:
     total_score: int
     is_aligned: bool
     timeframe_snapshots: Dict[str, StructureSnapshot]
+
+
+@dataclass
+class Setup:
+    symbol: str
+    direction: str  # 'bullish' / 'bearish'
+    entry: float
+    stop_loss: float
+    take_profit: float
+    risk_reward: float
+    confidence_score: int
+
+
+@dataclass
+class SupplyDemandZone:
+    type: str  # "supply" or "demand"
+    start_price: float
+    end_price: float
+    start_index: int
+    end_index: int
+    timeframe: str
+    swept: bool = False

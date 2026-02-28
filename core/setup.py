@@ -3,8 +3,7 @@
 from typing import Optional, List
 import pandas as pd
 
-from core.models.analysis import TopDownSnapshot, StructureSnapshot
-from core.models.setup import Setup
+from core.models import Setup, StructureSnapshot, TopDownSnapshot
 
 
 class SetupEvaluator:
