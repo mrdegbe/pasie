@@ -13,6 +13,5 @@ PAIRS = [
 # Confidence threshold for alerts
 CONFIDENCE_THRESHOLD = 80.0
 
-
 BOT_TOKEN = "8455530486:AAFUH9qHMfsXpMEJ3z2rebBYS-qaVzha1oE"
 CHAT_ID = "7569585318"
