@@ -11,7 +11,7 @@ PAIRS = [
 ]
 
 # Confidence threshold for alerts
-CONFIDENCE_THRESHOLD = 20.0
+CONFIDENCE_THRESHOLD = 80.0
 
 
 BOT_TOKEN = "8455530486:AAFUH9qHMfsXpMEJ3z2rebBYS-qaVzha1oE"

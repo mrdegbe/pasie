@@ -126,10 +126,11 @@ class SetupEvaluator:
         #     + min(len(candidate_zones), 3) / 3 * 0.2  # SD zone confluence
         #     + min(len(candidate_levels), 3) / 3 * 0.1  # liquidity confluence
         # )
+
+
         # ---------------------------------------------------
         # 6️⃣ Confidence scoring (0–100 institutional model)
         # ---------------------------------------------------
-
         # 1️⃣ Macro alignment (max 40)
         alignment_component = (topdown_snapshot.alignment_score / 100) * 40
 
