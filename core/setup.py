@@ -120,11 +120,45 @@ class SetupEvaluator:
         # ---------------------------------------------------
         # 6️⃣ Confidence scoring
         # ---------------------------------------------------
+        # confidence_score = (
+        #     topdown_snapshot.alignment_score * 0.4  # macro alignment
+        #     + (1 if micro_bias == macro_bias else 0) * 0.3  # micro alignment
+        #     + min(len(candidate_zones), 3) / 3 * 0.2  # SD zone confluence
+        #     + min(len(candidate_levels), 3) / 3 * 0.1  # liquidity confluence
+        # )
+        # ---------------------------------------------------
+        # 6️⃣ Confidence scoring (0–100 institutional model)
+        # ---------------------------------------------------
+
+        # 1️⃣ Macro alignment (max 40)
+        alignment_component = (topdown_snapshot.alignment_score / 100) * 40
+
+        # 2️⃣ Micro structure quality (max 20)
+        structure_component = 0
+
+        if m15_snapshot.bias.external == macro_bias:
+            structure_component += 10
+
+        if "expansion" in m15_snapshot.state:
+            structure_component += 5
+
+        if abs(m15_snapshot.momentum) > 1:
+            structure_component += 5
+
+        structure_component = min(structure_component, 20)
+
+        # 3️⃣ Supply/Demand confluence (max 20)
+        zone_component = min(len(candidate_zones), 3) / 3 * 20
+
+        # 4️⃣ Liquidity confluence (max 20)
+        liquidity_component = min(len(candidate_levels), 3) / 3 * 20
+
+        # Final confidence
         confidence_score = (
-            topdown_snapshot.alignment_score * 0.4  # macro alignment
-            + (1 if micro_bias == macro_bias else 0) * 0.3  # micro alignment
-            + min(len(candidate_zones), 3) / 3 * 0.2  # SD zone confluence
-            + min(len(candidate_levels), 3) / 3 * 0.1  # liquidity confluence
+            alignment_component
+            + structure_component
+            + zone_component
+            + liquidity_component
         )
 
         # ---------------------------------------------------
