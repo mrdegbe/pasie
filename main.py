@@ -1,344 +1,105 @@
 import MetaTrader5 as mt5
-import time as systime
-
-from core.analysis.mtf.topdown_engine import TopDownEngine
-from core.analysis.structure.structure_engine import analyze_structure
-from core.market_data.mt5_connector import connect, shutdown
-from core.market_data.data_fetcher import get_data
-
-PAIRS = [
-    "EURUSDm",
-    # "GBPUSDm",
-    # "AUDUSDm",
-    # "NZDUSDm",
-    # "USDCHFm",
-    # "USDCADm",
-    # "USDJPYm",
-    # "GBPJPYm",
-    # "XAUUSDm",
-]
-
-# Connect to MT5 terminal
-if not connect():
-    quit()
-
-# --------------------------
-# Create TopDownEngine instance
-# --------------------------
-engine = TopDownEngine(get_data_function=get_data)  # inject your data fetching function
-
-try:
-
-    # while True:
-    for symbol in PAIRS:
-        print(f"\nAnalyzing {symbol}...")
-
-        # Get multi-timeframe snapshots
-        snapshots = engine.analyze_symbol(symbol)
-
-        print(f"{symbol} → Timeframe Analysis: {snapshots}")
-
-        # snapshots is a dict of StructureSnapshot
-        # for tf, snap in snapshots.items():
-        #     print(
-        #         f"{symbol} → {tf.upper()} Bias: {snap.bias.external}, "
-        #         f"Internal: {snap.bias.internal}, State: {snap.state}, Momentum: {snap.momentum}"
-        #     )
-
-except KeyboardInterrupt:
-    print("\nBot stopped manually.")
-    shutdown()
-
-    # print(structure["state"])
-    # print(structure["external_direction"])
-    # print(structure["internal_direction"])
-    # print(structure["momentum_score"])
-    # print(structure["bos"])
-
-    # print(f"Structure: {structure}")
-    # with open("output.py", "w") as file:
-    #     file.write("# STRUCTURE ANALYSIS\n")
-    #     for key, value in structure.items():
-    #         file.write(f"{key}: {value}\n")
-
-    # print(structure["state"])
-    # print(structure["momentum_score"])
-    # print(structure["bos"])
-    # while True:
-
-    #     print("\n==============================")
-    #     cycle_messages = []
-    #     for symbol in PAIRS:
-
-    #         print(f"Checking {symbol}")
-
-    #         df_h4 = get_data(symbol, mt5.TIMEFRAME_H4)
-    #         df_m15 = get_data(symbol, mt5.TIMEFRAME_M15)
-
-    #         df_h4 = format_dataframe(df_h4)
-    #         df_m15 = format_dataframe(df_m15)
-
-    #         if df_m15 is None or len(df_m15) < 50:
-    #             print(f"{symbol} → Not enough data")
-    #             continue
-
-    #         closed_time = df_m15.index[-2]  # candle close trigger only
-
-    #         # Initialize memory for pair
-    #         if symbol not in state.last_processed_time:
-    #             state.last_processed_time[symbol] = None
-
-    #         # Skip if already processed
-    #         if state.last_processed_time[symbol] == closed_time:
-    #             print(f"{symbol} → No new candle")
-    #             continue
-
-    #         state.last_processed_time[symbol] = closed_time
-
-    #         print(f"{symbol} → New candle closed at {closed_time}")
-
-    #         # STRUCTURE
-    #         swings_h4 = find_swings(df_h4)
-    #         structure_h4 = determine_structure(swings_h4)
-
-    #         swings_m15 = find_swings(df_m15)
-    #         structure_m15 = determine_structure(swings_m15)
+import time
+
+from core.analysis.structure.engine import StructureEngine
+from core.analysis.topdown.engine import TopDownEngine
+from core.data.mt5 import connect, shutdown, get_data
+from core.models.setup import Setup
+from core.setup.engine import SetupEvaluator
+from infrastructure.telegram.alerts import send_telegram_message
+from utils.helper import PAIRS
+
+# Confidence threshold for alerts
+CONFIDENCE_THRESHOLD = 20.0
+
+
+def main():
+    if not connect():
+        return
+
+    structure_engines = {pair: StructureEngine(pair) for pair in PAIRS}
+    evaluator = {pair: SetupEvaluator(pair) for pair in PAIRS}
+
+    try:
+        while True:
+            for symbol in PAIRS:
+                # -------------------------------
+                # 1️⃣ Fetch latest data
+                # -------------------------------
+                weekly_df = get_data(symbol, mt5.TIMEFRAME_W1)
+                daily_df = get_data(symbol, mt5.TIMEFRAME_D1)
+                h4_df = get_data(symbol, mt5.TIMEFRAME_H4)
+                m15_df = get_data(symbol, mt5.TIMEFRAME_M15)
+
+                if any(df is None for df in [weekly_df, daily_df, h4_df, m15_df]):
+                    print(f"[{symbol}] Failed to fetch data, skipping...")
+                    continue
+
+                # -------------------------------
+                # 2️⃣ Top-down analysis
+                # -------------------------------
+                topdown = TopDownEngine(symbol)
+                snapshot = topdown.analyze(
+                    {"W1": weekly_df, "D1": daily_df, "H4": h4_df, "M15": m15_df}
+                )
+
+                # -------------------------------
+                # 3️⃣ Structure analysis
+                # -------------------------------
+                h4_snapshot = structure_engines[symbol].analyze(h4_df, timeframe="H4")
+                m15_snapshot = structure_engines[symbol].analyze(
+                    m15_df, timeframe="M15"
+                )
+
+                # -------------------------------
+                # 4️⃣ Evaluate setup
+                # -------------------------------
+                setup: Setup | None = evaluator[symbol].evaluate(
+                    snapshot, h4_snapshot, m15_snapshot, m15_df
+                )
+                print(f"[{symbol}] Evaluated setup: {setup}")
+
+                # -------------------------------
+                # 5️⃣ Send Telegram alert if valid
+                # -------------------------------
+                if setup and setup.confidence_score >= CONFIDENCE_THRESHOLD:
+                    msg = (
+                        f"PASIE Setup Detected!\n"
+                        f"Pair: {setup.symbol}\n"
+                        f"Direction: {setup.direction}\n"
+                        f"Entry: {setup.entry:.5f}\n"
+                        f"SL: {setup.stop_loss:.5f}\n"
+                        f"TP: {setup.take_profit:.5f}\n"
+                        f"RR: {setup.risk_reward:.2f}\n"
+                        f"Confidence: {setup.confidence_score:.1f}"
+                    )
+                    print(msg)
+                    send_telegram_message(msg)
+                
+                else:
+                    msg = (
+                        f"PASIE Setup Detected!\n"
+                        f"Pair: {setup.symbol}\n"
+                        f"Direction: {setup.direction}\n"
+                        f"Entry: {setup.entry:.5f}\n"
+                        f"SL: {setup.stop_loss:.5f}\n"
+                        f"TP: {setup.take_profit:.5f}\n"
+                        f"RR: {setup.risk_reward:.2f}\n"
+                        f"Confidence: {setup.confidence_score:.1f}"
+                    )
+                    send_telegram_message(msg)
+
+            # -------------------------------
+            # 6️⃣ Wait for next M15 bar (~900s)
+            # -------------------------------
+            time.sleep(900)
+
+    except KeyboardInterrupt:
+        print("Stopping PASIE scanner...")
+
+    finally:
+        shutdown()
+
 
-    #         # LIQUIDITY
-    #         liquidity_signal, sweep_index = detect_liquidity_sweep(df_m15, swings_m15)
-
-    #         sweep_price = None
-    #         if liquidity_signal and sweep_index is not None:
-    #             if "bullish" in liquidity_signal:
-    #                 sweep_price = df_m15["Low"].iloc[sweep_index]
-    #             elif "bearish" in liquidity_signal:
-    #                 sweep_price = df_m15["High"].iloc[sweep_index]
-
-    #         # CHOCH
-    #         choch_signal, reasons, choch_index = detect_choch(
-    #             df_m15, swings_m15, structure_m15, sweep_index
-    #         )
-
-    #         # CONTINUATION
-    #         signal = detect_continuation_setup(
-    #             df_m15, structure_m15, sweep_index, sweep_price, choch_index, swings_m15
-    #         )
-
-    #         # ALERT SECTION
-    #         if signal:
-
-    #             message = f"""
-    #         🚨 TRADE ALERT
-
-    #         Pair: {symbol}
-    #         Model: {signal['model']}
-    #         Direction: {signal['direction'].upper()}
-    #         Zone: {signal['zone_low']} - {signal['zone_high']}
-    #         Entry: {signal['entry']}
-    #         Stop: {signal['stop']}
-    #         Target: {signal['target']}
-    #         RR: {signal['rr']}
-    #         """
-
-    #         else:
-
-    #             status = "Monitoring..."
-
-    #             if liquidity_signal and not choch_signal:
-    #                 status = "Liquidity sweep → waiting CHoCH"
-
-    #             elif choch_signal:
-    #                 status = "CHoCH detected → waiting retrace"
-
-    #             elif structure_h4 != structure_m15:
-    #                 status = "HTF / LTF not aligned"
-
-    #             message = f"""
-    #         📊 {symbol}
-    #         4H: {structure_h4.upper()}
-    #         15M: {structure_m15.upper()}
-    #         Liquidity: {liquidity_signal}
-    #         CHoCH: {choch_signal}
-    #         Status: {status}
-    #         """
-
-    #         cycle_messages.append(message)
-
-    #         # print(message)
-    #     # send_telegram_alert(message)
-    #     # if cycle_messages:
-    #     #     final_message = "\n\n========================\n".join(cycle_messages)
-    #     #     print(final_message)
-    #     #     send_telegram_alert(final_message)
-
-    #     # Sleep AFTER processing all pairs
-    #     systime.sleep(10)
-
-
-# try:
-#     while True:
-
-#         for symbol in PAIRS:
-
-#             # -------------------------
-#             # GET DATA
-#             # -------------------------
-#             df_h4 = get_data(symbol, mt5.TIMEFRAME_H4)
-#             df_m15 = get_data(symbol, mt5.TIMEFRAME_M15)
-
-#             if df_h4 is None or df_m15 is None:
-#                 print(f"{symbol} → No data returned")
-#                 continue
-
-#             if len(df_m15) < 50:
-#                 continue
-
-#             df_h4 = format_dataframe(df_h4)
-#             df_m15 = format_dataframe(df_m15)
-
-#             # -------------------------
-#             # USE CLOSED CANDLE ONLY
-#             # -------------------------
-#             closed_time = df_m15.index[-2]
-
-#             # Initialize pair memory
-#             if symbol not in state.last_processed_time:
-#                 state.last_processed_time[symbol] = None
-
-#             # Skip if already processed
-#             if state.last_processed_time[symbol] == closed_time:
-#                 continue
-
-#             # Update memory
-#             state.last_processed_time[symbol] = closed_time
-
-#             print(f"\n{symbol} → New 15M candle closed at {closed_time}")
-
-#             # -------------------------
-#             # STRUCTURE
-#             # -------------------------
-#             swings_h4 = find_swings(df_h4)
-#             structure_h4 = determine_structure(swings_h4)
-
-#             swings_m15 = find_swings(df_m15)
-#             structure_m15 = determine_structure(swings_m15)
-
-#             # -------------------------
-#             # LIQUIDITY
-#             # -------------------------
-#             liquidity_signal, sweep_index = detect_liquidity_sweep(df_m15, swings_m15)
-
-#             sweep_price = None
-#             if liquidity_signal and sweep_index is not None:
-#                 if "bullish" in liquidity_signal:
-#                     sweep_price = df_m15["Low"].iloc[sweep_index]
-#                 elif "bearish" in liquidity_signal:
-#                     sweep_price = df_m15["High"].iloc[sweep_index]
-
-#             # -------------------------
-#             # CHOCH
-#             # -------------------------
-#             choch_signal, reasons, choch_index = detect_choch(
-#                 df_m15, swings_m15, structure_m15, sweep_index
-#             )
-
-#             # -------------------------
-#             # CONTINUATION MODEL
-#             # -------------------------
-#             signal = detect_continuation_setup(
-#                 df_m15, structure_m15, sweep_index, sweep_price, choch_index, swings_m15
-#             )
-
-#             # -------------------------
-#             # ALERT ONLY IF SIGNAL EXISTS
-#             # -------------------------
-#             if signal:
-
-#                 message = f"""
-#                                 🚨 *A-GRADE TRADE SETUP*
-
-#                                 Pair: {symbol}
-#                                 Model: {signal['model']}
-#                                 Direction: {signal['direction'].upper()}
-
-#                                 Zone: {signal['zone_low']} - {signal['zone_high']}
-#                                 Entry: {signal['entry']}
-#                                 Stop: {signal['stop']}
-#                                 Target: {signal['target']}
-#                                 RR: {signal['rr']}
-#                                 """
-
-#                 print(message)
-#                 send_telegram_alert(message)
-#                 print(f"{symbol} → Signal sent")
-
-#             else:
-#                 # print(f"{symbol} → No setup")
-#                 # send_telegram_alert(f"{symbol} → No setup")
-#                 status = "Monitoring..."
-
-#                 if liquidity_signal and not choch_signal:
-#                     status = "Liquidity sweep detected – waiting for CHoCH"
-
-#                 elif choch_signal and not signal:
-#                     status = "CHoCH detected – waiting for retrace into zone"
-
-#                 elif structure_h4 != structure_m15:
-#                     status = "HTF and LTF not aligned"
-
-#                 elif structure_m15 == "bullish":
-#                     status = "Bullish structure – no liquidity event"
-
-#                 elif structure_m15 == "bearish":
-#                     status = "Bearish structure – no liquidity event"
-
-#                 message = f"""
-#             📊 *MARKET STATE*
-
-#             Pair: {symbol}
-
-#             4H Bias: {structure_h4.upper()}
-#             15M Structure: {structure_m15.upper()}
-#             Liquidity: {liquidity_signal}
-#             CHoCH: {choch_signal}
-
-#             Status: {status}
-#             """
-
-#                 print(message)
-#                 send_telegram_alert(message)
-
-#         # Small delay to prevent CPU overuse
-#         systime.sleep(5)
-
-# except KeyboardInterrupt:
-#     print("\nBot stopped manually.")
-#     shutdown()
-
-# ---------------------------------
-# 8️⃣ PLOT
-# ---------------------------------
-# Create empty series
-# swing_highs = pd.Series(np.nan, index=df_m15.index)
-# swing_lows = pd.Series(np.nan, index=df_m15.index)
-
-# for swing in swings_m15:
-#     time, price, swing_type = swing
-#     if swing_type == "high":
-#         swing_highs.loc[time] = price
-#     else:
-#         swing_lows.loc[time] = price
-
-# apds = [
-#     mpf.make_addplot(swing_highs, type="scatter", marker="v", markersize=100),
-#     mpf.make_addplot(swing_lows, type="scatter", marker="^", markersize=100),
-# ]
-
-# mpf.plot(
-#     df_m15,
-#     type="candle",
-#     addplot=apds,
-#     title=f"{symbol} M15 Structure ({structure_m15.upper()})",
-#     style="charles",
-#     volume=False,
-# )
+if __name__ == "__main__":
+    main()
